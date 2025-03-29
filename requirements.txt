@@ -1,0 +1,11 @@
+pandas
+numpy
+torch
+matplotlib
+seaborn
+scikit-learn
+torch
+seaborn
+torchvision
+torchaudio
+tensorflow[cuda]

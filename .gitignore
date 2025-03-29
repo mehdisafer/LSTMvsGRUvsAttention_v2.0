@@ -1,0 +1,12 @@
+__init__.py
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+*.whl
+*.log
+*.sqlite3
+*.db
+.venv/
