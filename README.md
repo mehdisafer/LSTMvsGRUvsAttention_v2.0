@@ -32,11 +32,34 @@ LSTMvsGRUvsAttention/
 - **`src/`** : Scripts Python pour prétraiter les données, entraîner/évaluer les modèles, etc.
 - **`notebooks/`** : Notebook final où tout est exécuté et visualisé.
 
+## Prérequis
+
+- Python 3.11 ou supérieur
+
 ## Installation
 
-```bash
-pip install -r requirements.txt
-```
+1. **Cloner le dépôt :**
+
+   ```bash
+   git clone https://github.com/mehdisafer/LSTMvsGRUvsAttention_v2.0.git
+   cd LSTMvsGRUvsAttention_v2.0
+   ```
+
+2. **Créer et activer un environnement virtuel :**
+
+   ```bash
+   python -m venv venv
+   # Sous Linux/Mac :
+   source venv/bin/activate
+   # Sous Windows :
+   venv\Scripts\activate
+   ```
+
+3. **Installer les dépendances :**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
