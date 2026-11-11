@@ -1,0 +1,6 @@
+# Direct dependencies pinned to the locally exercised versions.
+# Install CPU PyTorch separately using the command in README.md.
+numpy==2.3.5
+pandas==2.2.3
+scikit-learn==1.8.0
+pytest==9.0.2
