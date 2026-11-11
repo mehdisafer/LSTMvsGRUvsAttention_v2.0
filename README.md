@@ -18,6 +18,7 @@ src/visualization.py            # Visualisation historique, conservée
 data/BTC.csv                   # Dataset historique, conservé
 scripts/smoke_benchmark.py      # Parcours CPU synthétique et déterministe
 requirements-test.txt          # Dépendances directes de test épinglées
+.gitattributes                  # Octets LF identiques dans les checkouts CI
 pytest.ini
 tests/
 .github/workflows/tests.yml     # CI CPU Linux/Windows
@@ -25,7 +26,7 @@ tests/
 
 ## Installation de test CPU
 
-La cible de la matrice CI est Python 3.12 et 3.13. Le candidat a été exécuté localement sous **Python 3.13.5 / Linux / PyTorch 2.10.0+cpu**. Windows, Python 3.12 et CUDA doivent être qualifiés séparément.
+La cible de la matrice CI est Python 3.12 et 3.13. Le candidat courant est testé localement sous **Python 3.13.5 / Linux / PyTorch 2.10.0+cpu**. La première révision publiée a aussi exécuté les tests CPU sur les deux systèmes ; la correction de provenance ajoutée ensuite doit être requalifiée sur sa propre révision. CUDA reste non vérifié.
 
 Dans un environnement virtuel isolé :
 
@@ -81,7 +82,9 @@ metrics = compute_metrics(scaler.inverse_transform(scaled_preds),
 
 Le script synthétique utilise les trois classes du dépôt, les horizons 1/3/7, un petit modèle réinitialisé pour chaque essai, une graine fixe, un thread CPU et des algorithmes déterministes. Il compare chaque sortie à une référence de persistance : la dernière valeur observée de la fenêtre.
 
-Le rapport JSON contient les paramètres, les versions de l'environnement, les métriques, la référence naïve et les empreintes du code, des tests, du workflow, des dépendances directes et des données. En CI, il ajoute le SHA checkout, le SHA de tête de PR et les identifiants du run ; hors GitHub, ces identifiants restent nuls. Deux processus indépendants ont produit des rapports identiques dans l'environnement local testé. Cela ne promet pas une égalité bit-à-bit entre systèmes, appareils ou versions de PyTorch.
+Le rapport JSON contient les paramètres, les versions de l'environnement, les métriques, la référence naïve et les empreintes du code, des tests, du workflow, des dépendances directes et des données. Les chemins du manifeste utilisent `/` sur tous les systèmes et le CSV synthétique est sérialisé en LF. Les empreintes portent sur les octets réels, sans normalisation qui masquerait une différence. En CI, il ajoute le SHA checkout, le SHA de tête de PR et les identifiants du run ; hors GitHub, ces identifiants restent nuls. Deux processus indépendants ont produit des rapports identiques dans l'environnement local testé. Cela ne promet pas une égalité bit-à-bit entre systèmes, appareils ou versions de PyTorch.
+
+Le contrôle `--verify-git`, activé automatiquement dans GitHub Actions, compare les objets Git calculés sur ces octets au checkout effectivement testé. Il refuse un fichier source modifié ou non suivi et un SHA de checkout différent de celui du run. Les attributs Git imposent LF aux sources et configurations sans changer les fichiers historiques binaires, CSV et notebook. Hors checkout, la recette peut fonctionner sans ce contrôle mais inscrit explicitement `NOT_RUN` dans le rapport.
 
 Aucun score synthétique ne permet de conclure qu'un modèle est supérieur sur des données réelles. Pour cela, il reste à construire une évaluation temporelle walk-forward, documenter l'origine des poids pré-entraînés et réserver une période finale de test non utilisée pour sélectionner les modèles.
 
@@ -89,4 +92,4 @@ Aucun score synthétique ne permet de conclure qu'un modèle est supérieur sur 
 
 Le workflow candidat cible Ubuntu et Windows, Python 3.12/3.13, avec permissions en lecture et actions épinglées par commit. Il conserve JUnit et le rapport synthétique. Il n'utilise aucun secret et ne déploie rien.
 
-**Qualification locale du 11 novembre 2026 : 64 tests réussis, 1 test CUDA ignoré ; compilation réussie ; 9 cas synthétiques exécutés deux fois. Les résultats hébergés doivent être consultés sur la révision exacte de la PR : ce checkpoint local ne les anticipe pas.** Voir [le dossier de validation](docs/VALIDATION.md).
+**Qualification locale du 11 novembre 2026 : 68 tests réussis, 1 test CUDA ignoré ; compilation réussie ; 9 cas synthétiques exécutés deux fois. La première CI a révélé une conversion LF/CRLF des sources sous Windows malgré des tests réussis. La correction de provenance est testée séparément et ses résultats hébergés doivent être consultés sur la révision exacte de la PR ; les résultats du parent ne lui sont pas transférés.** Voir [le dossier de validation](docs/VALIDATION.md).

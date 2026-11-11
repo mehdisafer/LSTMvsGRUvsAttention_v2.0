@@ -1,0 +1,9 @@
+# Keep the bytes exercised by CPU CI equal to the Git source blobs.
+# Do not change the historical notebook, data or binary checkpoint policy.
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.ini text eol=lf
+requirements*.txt text eol=lf
+.gitattributes text eol=lf

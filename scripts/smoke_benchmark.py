@@ -8,6 +8,7 @@ import os
 from importlib.metadata import version
 import platform
 import sys
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,63 @@ from src.preprocess import numpy_to_torch, prepare_datasets, train_val_test_spli
 from src.train import train_model
 
 
-def run_smoke(seed: int = 2026) -> dict:
+def collect_source_evidence(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """Hash actual file bytes, retaining both SHA-256 and Git blob identity."""
+    paths = sorted(
+        [p for directory in ("src", "models", "tests", "scripts")
+         for p in (root / directory).rglob("*.py")]
+        + [root / "requirements-test.txt", root / "pytest.ini",
+           root / ".github/workflows/tests.yml", root / ".gitattributes"]
+    )
+    sha256, git_blobs = {}, {}
+    for path in paths:
+        data = path.read_bytes()
+        name = path.relative_to(root).as_posix()
+        sha256[name] = hashlib.sha256(data).hexdigest()
+        git_blobs[name] = hashlib.sha1(
+            b"blob " + str(len(data)).encode("ascii") + b"\0" + data,
+            usedforsecurity=False,
+        ).hexdigest()
+    return sha256, git_blobs
+
+
+def verify_git_sources(
+    root: Path, file_blobs: dict[str, str], expected_sha: str | None = None
+) -> dict:
+    """Fail when executed source bytes differ from the tracked checkout.
+
+    SHA-1 is used only as Git's object identifier, not as a signature or
+    security guarantee. The independently recorded file digests use SHA-256.
+    """
+    def git(*arguments: str) -> bytes:
+        return subprocess.run(
+            ["git", *arguments], cwd=root, check=True, capture_output=True,
+            timeout=30,
+        ).stdout
+
+    checkout = git("rev-parse", "--verify", "HEAD").decode("ascii").strip()
+    if expected_sha is not None and checkout != expected_sha:
+        raise RuntimeError(f"Checkout identity mismatch: {checkout} != {expected_sha}")
+    entries = git("ls-tree", "-rz", checkout, "--", *sorted(file_blobs))
+    tracked = {}
+    for entry in entries.split(b"\0"):
+        if not entry:
+            continue
+        metadata, path = entry.split(b"\t", 1)
+        _, kind, oid = metadata.split(b" ")
+        if kind != b"blob":
+            raise RuntimeError("Non-file entry in source evidence")
+        tracked[path.decode("utf-8")] = oid.decode("ascii")
+    mismatched = sorted(
+        path for path, oid in file_blobs.items() if tracked.get(path) != oid
+    )
+    if mismatched:
+        raise RuntimeError(f"Source bytes differ from Git checkout: {mismatched}")
+    return {"status": "VERIFIED", "checkout_sha": checkout,
+            "source_file_count": len(file_blobs)}
+
+
+def run_smoke(seed: int = 2026, verify_git: bool = False) -> dict:
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
     dates = pd.date_range('2025-01-01', periods=180, freq='D')
@@ -58,11 +115,10 @@ def run_smoke(seed: int = 2026) -> dict:
             results.append({'architecture': name, 'horizon': horizon,
                             'test_examples': len(truth), 'metrics': metrics,
                             'persistence_baseline': baseline, 'history': history})
-    source_paths = sorted(
-        [p for directory in ("src", "models", "tests", "scripts")
-         for p in (ROOT / directory).rglob("*.py")]
-        + [ROOT / "requirements-test.txt", ROOT / "pytest.ini",
-           ROOT / ".github/workflows/tests.yml"]
+    source_hashes, file_blobs = collect_source_evidence(ROOT)
+    checkout_verification = (
+        verify_git_sources(ROOT, file_blobs, os.getenv("GITHUB_SHA"))
+        if verify_git else {"status": "NOT_RUN", "reason": "Git verification not requested"}
     )
     return {
         'scope': 'CPU synthetic integration smoke; not historical BTC accuracy',
@@ -78,9 +134,9 @@ def run_smoke(seed: int = 2026) -> dict:
                    'run_attempt': os.getenv('GITHUB_RUN_ATTEMPT'),
                    'event': os.getenv('GITHUB_EVENT_NAME')},
         'cuda_exercised': False, 'threads': 1,
-        'dataset_sha256': hashlib.sha256(frame.to_csv().encode()).hexdigest(),
-        'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in source_paths},
+        'dataset_sha256': hashlib.sha256(frame.to_csv(lineterminator='\n').encode()).hexdigest(),
+        'source_sha256': source_hashes,
+        'git_checkout_verification': checkout_verification,
         'results': results,
     }
 
@@ -89,12 +145,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('smoke-results.json'))
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--verify-git', action='store_true',
+                        help='Require actual source bytes to match the current Git checkout')
     args = parser.parse_args()
     if not 0 <= args.seed < 2**32:
         parser.error('--seed must be between 0 and 2**32 - 1')
-    result = run_smoke(args.seed)
+    result = run_smoke(args.seed, args.verify_git or os.getenv("GITHUB_ACTIONS") == "true")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+    args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + '\n', encoding='utf-8', newline='\n')
     print(f'Synthetic smoke completed: {len(result["results"])} model/horizon cases')
 
 
